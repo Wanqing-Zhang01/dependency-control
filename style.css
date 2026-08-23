@@ -87,19 +87,19 @@ body {
 #chartGrid {
   display: grid;
   grid-template-columns: 88px repeat(12, 1fr);
-  grid-template-rows: 16px 26px repeat(3, 52px);
+  grid-template-rows: 26px repeat(3, 52px);
   position: relative;
   row-gap: 4px;
 }
 
 .axis-spacer {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
 }
 
 #axisCells {
   grid-column: 2 / 14;
-  grid-row: 2;
+  grid-row: 1;
   display: grid;
   grid-template-columns: repeat(12, 1fr);
 }
@@ -128,25 +128,6 @@ body {
   border-radius: 50%;
 }
 
-#deadlineLabel {
-  grid-column: 9;
-  grid-row: 1;
-  justify-self: center;
-  align-self: start;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--red);
-  white-space: nowrap;
-}
-
-#deadlineLine {
-  grid-column: 9;
-  grid-row: 2 / 6;
-  justify-self: center;
-  width: 0;
-  border-left: 2px dashed var(--red);
-}
-
 .row-label {
   display: flex;
   align-items: center;
@@ -156,22 +137,22 @@ body {
 }
 
 #designLabel {
-  grid-row: 3;
+  grid-row: 2;
 }
 #designTrackCell {
-  grid-row: 3;
+  grid-row: 2;
 }
 #legalLabel {
-  grid-row: 4;
+  grid-row: 3;
 }
 #legalTrackCell {
-  grid-row: 4;
+  grid-row: 3;
 }
 #launchLabel {
-  grid-row: 5;
+  grid-row: 4;
 }
 #launchTrackCell {
-  grid-row: 5;
+  grid-row: 4;
 }
 
 .track-cell {
@@ -348,6 +329,11 @@ body {
   font-family: inherit;
   color: var(--ink);
   margin-bottom: 12px;
+}
+
+#reasoning::placeholder {
+  font-style: italic;
+  color: #9ca3af;
 }
 
 #reasoning:disabled,
