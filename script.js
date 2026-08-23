@@ -41,8 +41,7 @@
     }
   }
 
-  // ---------- Scheduling math ----------
-  // Returns { legalStart, launchDay }
+  // ---------- Scheduling math (position only — no color/judgment here) ----------
   function computeSchedule(depType, lag) {
     var legalStart;
     if (depType === "ss") {
@@ -64,7 +63,18 @@
     return { legalStart: legalStart, legalEnd: legalEnd, launchDay: launchDay };
   }
 
-  // ---------- Rendering ----------
+  function currentInputs() {
+    var lag = parseInt(lagInput.value, 10);
+    if (isNaN(lag)) lag = 0;
+    return { depType: depTypeSelect.value, lag: lag };
+  }
+
+  function currentSchedule() {
+    var inputs = currentInputs();
+    return computeSchedule(inputs.depType, inputs.lag);
+  }
+
+  // ---------- Dot rendering ----------
   function makeDot(day, className) {
     var dot = document.createElement("div");
     dot.className = "dot " + className;
@@ -72,6 +82,7 @@
     return dot;
   }
 
+  // Design is fixed and never evaluated — always blue.
   function renderDesign() {
     designDots.innerHTML = "";
     for (var d = DESIGN_START; d < DESIGN_START + DESIGN_DURATION; d++) {
@@ -79,18 +90,22 @@
     }
   }
 
-  // Legal has no pass/fail of its own — each dot is colored by whether
-  // that individual day falls on/after the Day 8 deadline. It never turns
-  // green; only Launch's single outcome dot does.
-  function renderLegal(legalStart) {
+  // Legal has no pass/fail of its own. Before submit (or while the learner
+  // is repositioning it), every dot is plain blue — no judgment is shown.
+  // Only after submit does each dot color individually by its own day:
+  // red if that day is >= 8, blue otherwise. It never turns green.
+  function renderLegal(legalStart, evaluated) {
     legalDots.innerHTML = "";
     for (var d = legalStart; d < legalStart + LEGAL_DURATION; d++) {
       if (d < 1 || d > TOTAL_DAYS) continue;
-      var cls = "legal" + (d >= DEADLINE_DAY ? " legal-late" : "");
-      legalDots.appendChild(makeDot(d, cls));
+      var late = evaluated && d >= DEADLINE_DAY;
+      legalDots.appendChild(makeDot(d, "legal" + (late ? " legal-late" : "")));
     }
   }
 
+  // Launch's dot is gray ("pending") before submit or while repositioning.
+  // Only after submit does it become green (meets the deadline) or red
+  // (misses it) — outcome is "pending", "success", or "miss".
   function renderLaunch(launchDay, outcome) {
     launchDots.innerHTML = "";
     var day = Math.max(1, Math.min(TOTAL_DAYS, launchDay));
@@ -100,20 +115,14 @@
     launchDots.appendChild(makeDot(day, cls));
   }
 
-  function currentInputs() {
-    var lag = parseInt(lagInput.value, 10);
-    if (isNaN(lag)) lag = 0;
-    return { depType: depTypeSelect.value, lag: lag };
-  }
-
-  // Renders the chart for a given outcome ("default", "miss", or "success").
-  // Used for the unsubmitted/adjusted state, where Launch has no verdict yet.
-  function renderSchedule(outcome) {
-    var inputs = currentInputs();
-    var schedule = computeSchedule(inputs.depType, inputs.lag);
+  // Single entry point for drawing the whole chart. `evaluated` gates
+  // color/judgment: false = positions only, everything in its default
+  // pending look; true = judgment colors applied for the given outcome.
+  function renderChart(evaluated, success) {
+    var schedule = currentSchedule();
     renderDesign();
-    renderLegal(schedule.legalStart);
-    renderLaunch(schedule.launchDay, outcome);
+    renderLegal(schedule.legalStart, evaluated);
+    renderLaunch(schedule.launchDay, evaluated ? (success ? "success" : "miss") : "pending");
     return schedule;
   }
 
@@ -126,12 +135,18 @@
     chatHistory.scrollTop = chatHistory.scrollHeight;
   }
 
-  depTypeSelect.addEventListener("change", function () {
-    if (!state.sessionOver) renderSchedule("default");
-  });
-  lagInput.addEventListener("change", function () {
-    if (!state.sessionOver) renderSchedule("default");
-  });
+  // Position updates live as the learner adjusts the dependency type or
+  // lag. Judgment colors are NOT recomputed here — any control change
+  // drops back to the pending look until the next submit.
+  function handleControlChange() {
+    if (state.sessionOver) return;
+    renderChart(false);
+    resultText.textContent = "";
+    resultText.className = "result";
+  }
+
+  depTypeSelect.addEventListener("change", handleControlChange);
+  lagInput.addEventListener("input", handleControlChange);
 
   // ---------- Submit flow ----------
   function endSession() {
@@ -154,17 +169,14 @@
 
     state.submissionCount += 1;
 
-    // Compute the schedule once, determine the outcome, then render the
-    // chart directly against that outcome — Launch's dot color is a
-    // straight function of this same "success" value used everywhere else.
-    var inputs = currentInputs();
-    var schedule = computeSchedule(inputs.depType, inputs.lag);
+    // Determine the outcome for whatever configuration is active right
+    // now, then render the chart directly against it — this is the only
+    // place judgment colors get applied.
+    var schedule = currentSchedule();
     var success = schedule.launchDay <= DEADLINE_DAY;
     var missBy = success ? 0 : schedule.launchDay - DEADLINE_DAY;
 
-    renderDesign();
-    renderLegal(schedule.legalStart);
-    renderLaunch(schedule.launchDay, success ? "success" : "miss");
+    renderChart(true, success);
 
     addBubble(reasoning, "user");
 
@@ -197,7 +209,7 @@
       "I am your PM Coach. Make your visual adjustments to the timeline, then type your reasoning below to submit for evaluation.",
       "ai"
     );
-    renderSchedule("default");
+    renderChart(false);
   }
 
   init();

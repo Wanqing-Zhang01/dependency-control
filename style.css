@@ -3,6 +3,7 @@
   --blue-light: #93c5fd;
   --red: #dc2626;
   --green: #16a34a;
+  --pending-gray: #64748b;
   --ink: #1e293b;
   --muted: #64748b;
   --border: #e2e8f0;
@@ -201,7 +202,7 @@ body {
 .dot.launch {
   width: 16px;
   height: 16px;
-  background: var(--blue);
+  background: var(--pending-gray);
 }
 
 .dot.launch.miss {
