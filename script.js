@@ -79,11 +79,15 @@
     }
   }
 
+  // Legal has no pass/fail of its own — each dot is colored by whether
+  // that individual day falls on/after the Day 8 deadline. It never turns
+  // green; only Launch's single outcome dot does.
   function renderLegal(legalStart) {
     legalDots.innerHTML = "";
     for (var d = legalStart; d < legalStart + LEGAL_DURATION; d++) {
       if (d < 1 || d > TOTAL_DAYS) continue;
-      legalDots.appendChild(makeDot(d, "legal"));
+      var cls = "legal" + (d >= DEADLINE_DAY ? " legal-late" : "");
+      legalDots.appendChild(makeDot(d, cls));
     }
   }
 
@@ -96,12 +100,17 @@
     launchDots.appendChild(makeDot(day, cls));
   }
 
-  function renderSchedule(outcome) {
-    var depType = depTypeSelect.value;
+  function currentInputs() {
     var lag = parseInt(lagInput.value, 10);
     if (isNaN(lag)) lag = 0;
+    return { depType: depTypeSelect.value, lag: lag };
+  }
 
-    var schedule = computeSchedule(depType, lag);
+  // Renders the chart for a given outcome ("default", "miss", or "success").
+  // Used for the unsubmitted/adjusted state, where Launch has no verdict yet.
+  function renderSchedule(outcome) {
+    var inputs = currentInputs();
+    var schedule = computeSchedule(inputs.depType, inputs.lag);
     renderDesign();
     renderLegal(schedule.legalStart);
     renderLaunch(schedule.launchDay, outcome);
@@ -145,11 +154,16 @@
 
     state.submissionCount += 1;
 
-    var schedule = renderSchedule(null); // compute first to know outcome
+    // Compute the schedule once, determine the outcome, then render the
+    // chart directly against that outcome — Launch's dot color is a
+    // straight function of this same "success" value used everywhere else.
+    var inputs = currentInputs();
+    var schedule = computeSchedule(inputs.depType, inputs.lag);
     var success = schedule.launchDay <= DEADLINE_DAY;
     var missBy = success ? 0 : schedule.launchDay - DEADLINE_DAY;
 
-    // Re-render with the correct outcome color now that we know it.
+    renderDesign();
+    renderLegal(schedule.legalStart);
     renderLaunch(schedule.launchDay, success ? "success" : "miss");
 
     addBubble(reasoning, "user");

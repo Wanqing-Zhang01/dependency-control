@@ -194,6 +194,10 @@ body {
   background: var(--blue-light);
 }
 
+.dot.legal.legal-late {
+  background: var(--red);
+}
+
 .dot.launch {
   width: 16px;
   height: 16px;
