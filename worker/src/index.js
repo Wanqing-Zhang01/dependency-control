@@ -10,6 +10,10 @@
  * - Rate-limits to 10 requests/hour/IP via a Workers KV counter.
  * - Every request is evaluated independently — no conversation history
  *   is stored or sent between calls.
+ * - Gemini is required (via responseSchema) to return { declined, feedback }
+ *   rather than plain text, so callers can tell a Step-1 decline (the
+ *   learner's reasoning wasn't genuine) apart from a real evaluation
+ *   without guessing from the reply text.
  */
 
 const SYSTEM_PROMPT = `You are a strict, Socratic project management coach. You will be given: the learner's dependency and lag settings, the computed schedule outcome (already calculated — do not do any math yourself, rely only on the provided values), and the learner's typed reasoning.
@@ -26,7 +30,9 @@ If deadlineMet is false: acknowledge anything correct in their reasoning, then p
 
 NEGATIVE CONSTRAINT: under no circumstances use the words 'lead time', 'lag', 'fast-tracking', or 'compression' — and do not describe the mechanism in different phrasing either. Ask only about the relationship between the two tasks (can they overlap, does one need to fully finish before the other starts), not how to implement a fix.
 
-If deadlineMet is true: affirm their reasoning briefly, note why it works by citing the literal provided launchDay value, and end there — no further questions.`;
+If deadlineMet is true: affirm their reasoning briefly, note why it works by citing the literal provided launchDay value, and end there — no further questions.
+
+Respond with a JSON object with exactly two fields: "declined" (boolean — true if and only if you stopped at STEP 1 because the reasoning was not genuine, false if you completed STEP 2) and "feedback" (string — your reply text: only the decline message when declined is true, or the STEP 2 evaluation when declined is false).`;
 
 const REQUIRED_FIELDS = [
   "dependencyType",
@@ -143,6 +149,19 @@ function buildUserContext(body) {
   ].join("\n");
 }
 
+// Gemini is asked to return structured JSON ({ declined, feedback }) rather
+// than plain text, so "was this a decline or a real evaluation" is a field
+// the model itself commits to, not something the Worker (or the frontend)
+// has to guess by pattern-matching the reply text.
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    declined: { type: "BOOLEAN" },
+    feedback: { type: "STRING" },
+  },
+  required: ["declined", "feedback"],
+};
+
 async function callGemini(env, body) {
   const model = env.GEMINI_MODEL || "gemini-3.5-flash-lite";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
@@ -160,6 +179,8 @@ async function callGemini(env, body) {
     generationConfig: {
       temperature: 0.4,
       maxOutputTokens: 400,
+      responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
     },
   };
 
@@ -176,7 +197,7 @@ async function callGemini(env, body) {
     return { ok: false, status: res.status, error: detail };
   }
 
-  const text =
+  const rawText =
     data &&
     data.candidates &&
     data.candidates[0] &&
@@ -185,11 +206,22 @@ async function callGemini(env, body) {
     data.candidates[0].content.parts[0] &&
     data.candidates[0].content.parts[0].text;
 
-  if (!text) {
+  if (!rawText) {
     return { ok: false, status: 502, error: "Gemini response had no text content.", raw: data };
   }
 
-  return { ok: true, text };
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch (err) {
+    return { ok: false, status: 502, error: "Gemini returned malformed structured output." };
+  }
+
+  if (typeof parsed.feedback !== "string" || typeof parsed.declined !== "boolean") {
+    return { ok: false, status: 502, error: "Gemini's structured response was missing declined/feedback fields." };
+  }
+
+  return { ok: true, declined: parsed.declined, feedback: parsed.feedback };
 }
 
 export default {
@@ -243,7 +275,8 @@ export default {
 
     return jsonResponse(
       {
-        feedback: result.text,
+        feedback: result.feedback,
+        declined: result.declined,
         rateLimit: { remaining: rateLimit.remaining, resetAt: rateLimit.resetAt },
       },
       200,

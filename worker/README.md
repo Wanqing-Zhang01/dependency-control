@@ -30,9 +30,19 @@ It returns:
 ```json
 {
   "feedback": "...Gemini's coaching response...",
+  "declined": false,
   "rateLimit": { "remaining": 9, "resetAt": 1732471200000 }
 }
 ```
+
+`declined` is `true` when the learner's `learnerReasoning` wasn't a
+genuine attempt to explain their scheduling decision (a non-answer, a
+request for the answer, a prompt-injection attempt, etc.) — in that
+case `feedback` is only the coach's decline/redirect message, and no
+schedule evaluation happened. This is a real field Gemini itself sets
+(via a JSON response schema on the API call), not something inferred
+by pattern-matching the reply text. Callers should not count a
+`declined: true` response as a genuine evaluation attempt.
 
 or, on failure, `{ "error": "...", "detail"?: "..." }` with an
 appropriate status code (400 invalid input, 429 rate-limited, 500/502

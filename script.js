@@ -270,6 +270,16 @@
     var feedback = data && data.feedback ? data.feedback : "The AI coach didn't return a response. Please try submitting again.";
     setBubble(aiBubble, feedback, "ai");
 
+    // A decline (the Worker's Step 1: the reasoning wasn't a genuine
+    // attempt) is not a real evaluation — the learner hasn't actually
+    // attempted the task yet. Treat it exactly like the error-handling
+    // paths above: don't touch the attempt counter, don't lock the
+    // session, just let them try again.
+    if (data && data.declined) {
+      recoverControlsAfterFailure();
+      return;
+    }
+
     state.submissionCount += 1;
 
     if (success || state.submissionCount >= MAX_SUBMISSIONS) {
