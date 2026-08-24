@@ -11,6 +11,10 @@
   var LEGAL_DURATION = 4; // Legal always spans 4 days
   var MAX_SUBMISSIONS = 3;
 
+  // The Cloudflare Worker that proxies to Gemini (see worker/README.md
+  // for the request/response shape this calls).
+  var WORKER_URL = "https://dependency-control-coach.wanqingzhang01.workers.dev";
+
   // ---------- State ----------
   var state = {
     submissionCount: 0,
@@ -27,7 +31,6 @@
   var reasoningInput = document.getElementById("reasoning");
   var submitBtn = document.getElementById("submitBtn");
   var chatHistory = document.getElementById("chatHistory");
-  var resultText = document.getElementById("resultText");
 
   // ---------- Axis ----------
   function buildAxis() {
@@ -72,6 +75,12 @@
   function currentSchedule() {
     var inputs = currentInputs();
     return computeSchedule(inputs.depType, inputs.lag);
+  }
+
+  // The Worker/Gemini context expects the readable form, not our "ss"/"fs"
+  // option values.
+  function readableDependencyType(depType) {
+    return depType === "ss" ? "start-to-start" : "finish-to-start";
   }
 
   // ---------- Dot rendering ----------
@@ -127,11 +136,20 @@
   }
 
   // ---------- Chat ----------
+  // Returns the bubble element so callers can update it later (e.g. swap
+  // a "Thinking..." placeholder for the real response).
   function addBubble(text, who) {
     var bubble = document.createElement("div");
     bubble.className = "bubble " + who;
     bubble.textContent = text;
     chatHistory.appendChild(bubble);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+    return bubble;
+  }
+
+  function setBubble(bubble, text, who) {
+    bubble.className = "bubble " + who;
+    bubble.textContent = text;
     chatHistory.scrollTop = chatHistory.scrollHeight;
   }
 
@@ -141,8 +159,6 @@
   function handleControlChange() {
     if (state.sessionOver) return;
     renderChart(false);
-    resultText.textContent = "";
-    resultText.className = "result";
   }
 
   depTypeSelect.addEventListener("change", handleControlChange);
@@ -158,7 +174,33 @@
     submitBtn.textContent = "Session Complete";
   }
 
-  function handleSubmit() {
+  function setControlsDisabled(disabled) {
+    depTypeSelect.disabled = disabled;
+    lagInput.disabled = disabled;
+    reasoningInput.disabled = disabled;
+    submitBtn.disabled = disabled;
+  }
+
+  // Puts the controls back the way they were before this (failed) attempt,
+  // so a transient error never costs the learner a try or locks them out.
+  function recoverControlsAfterFailure() {
+    setControlsDisabled(false);
+    submitBtn.textContent = state.submissionCount === 0 ? "Submit for evaluation" : "Try Again";
+  }
+
+  function friendlyErrorMessage(status, body) {
+    if (status === 429) {
+      return body && body.error
+        ? body.error
+        : "You've hit the limit for AI feedback requests right now. Please wait a bit and try again.";
+    }
+    if (body && body.error) {
+      return "The AI coach ran into a problem: " + body.error + " Please try submitting again.";
+    }
+    return "Couldn't reach the AI coach right now. Please check your connection and try submitting again.";
+  }
+
+  async function handleSubmit() {
     if (state.sessionOver) return;
 
     var reasoning = reasoningInput.value.trim();
@@ -167,11 +209,10 @@
       return;
     }
 
-    state.submissionCount += 1;
-
     // Determine the outcome for whatever configuration is active right
     // now, then render the chart directly against it — this is the only
-    // place judgment colors get applied.
+    // place judgment colors get applied. This is purely our own math and
+    // does not depend on the AI call below, so it happens immediately.
     var schedule = currentSchedule();
     var success = schedule.launchDay <= DEADLINE_DAY;
     var missBy = success ? 0 : schedule.launchDay - DEADLINE_DAY;
@@ -179,17 +220,51 @@
     renderChart(true, success);
 
     addBubble(reasoning, "user");
+    var aiBubble = addBubble("Thinking...", "ai thinking");
 
-    var aiText = success
-      ? "[AI evaluation would appear here — deadline met]"
-      : "[AI evaluation would appear here — schedule still misses the deadline]";
-    addBubble(aiText, "ai");
+    setControlsDisabled(true);
+    submitBtn.textContent = "Evaluating...";
 
-    resultText.textContent = success
-      ? "Launch lands on Day " + schedule.launchDay + " — meets the Day " + DEADLINE_DAY + " deadline."
-      : "Launch lands on Day " + schedule.launchDay + " — misses the Day " + DEADLINE_DAY +
-        " deadline by " + missBy + " day" + (missBy === 1 ? "" : "s") + ".";
-    resultText.className = "result " + (success ? "success" : "miss");
+    var inputs = currentInputs();
+    var payload = {
+      dependencyType: readableDependencyType(inputs.depType),
+      lag: inputs.lag,
+      legalStart: schedule.legalStart,
+      legalEnd: schedule.legalEnd,
+      launchDay: schedule.launchDay,
+      deadlineMet: success,
+      daysOverBy: missBy,
+      learnerReasoning: reasoning,
+    };
+
+    var res, data;
+    try {
+      res = await fetch(WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      data = await res.json().catch(function () {
+        return null;
+      });
+    } catch (err) {
+      // Network failure, CORS block, DNS, etc. — transient; don't cost
+      // the learner an attempt or lock them out.
+      setBubble(aiBubble, friendlyErrorMessage(null, null), "ai error");
+      recoverControlsAfterFailure();
+      return;
+    }
+
+    if (!res.ok) {
+      setBubble(aiBubble, friendlyErrorMessage(res.status, data), "ai error");
+      recoverControlsAfterFailure();
+      return;
+    }
+
+    var feedback = data && data.feedback ? data.feedback : "The AI coach didn't return a response. Please try submitting again.";
+    setBubble(aiBubble, feedback, "ai");
+
+    state.submissionCount += 1;
 
     if (success || state.submissionCount >= MAX_SUBMISSIONS) {
       endSession();
@@ -197,6 +272,7 @@
       reasoningInput.value = "";
       reasoningInput.placeholder = "Type your revised reasoning here...";
       submitBtn.textContent = "Try Again";
+      setControlsDisabled(false);
     }
   }
 

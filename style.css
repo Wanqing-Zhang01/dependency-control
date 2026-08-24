@@ -271,22 +271,6 @@ body {
   -moz-appearance: textfield;
 }
 
-.result {
-  margin: 16px 0 0;
-  font-size: 14px;
-  min-height: 20px;
-}
-
-.result.success {
-  color: var(--green);
-  font-weight: 600;
-}
-
-.result.miss {
-  color: var(--red);
-  font-weight: 600;
-}
-
 /* ---------- Chat panel ---------- */
 
 .chat-history {
@@ -322,6 +306,30 @@ body {
   color: var(--ink);
   align-self: flex-end;
   border-top-right-radius: 4px;
+}
+
+.bubble.thinking {
+  font-style: italic;
+  color: var(--muted);
+  animation: thinking-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.bubble.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  align-self: flex-start;
+  border-top-left-radius: 4px;
 }
 
 #reasoning {
