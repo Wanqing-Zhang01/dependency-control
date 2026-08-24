@@ -55,9 +55,15 @@
       legalStart = DESIGN_START + DESIGN_DURATION + lag;
     }
 
-    // Keep the bar renderable within the visible 1-12 day axis.
-    legalStart = Math.max(1, Math.min(TOTAL_DAYS - LEGAL_DURATION + 1, legalStart));
-
+    // Deliberately not clamped here: legalStart (and therefore launchDay)
+    // must reflect the true math for both dependency types symmetrically,
+    // since deadlineMet/daysOverBy are derived from it. Clamping used to
+    // live here, but Start-to-Start's baseline (Design's start, day 1) is
+    // already at the axis floor, so any negative lag was silently clamped
+    // straight back to day 1 — freezing Legal *and* Launch, and quietly
+    // making the pass/fail math wrong too. Rendering (renderLegal's
+    // per-dot skip, renderLaunch's display clamp) already handles values
+    // that fall outside the visible 1-12 axis.
     var legalEnd = legalStart + LEGAL_DURATION - 1;
 
     // Launch is a single-day event, Finish-to-Start from Legal, 0 lag.
