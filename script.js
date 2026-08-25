@@ -15,6 +15,13 @@
   // for the request/response shape this calls).
   var WORKER_URL = "https://dependency-control-coach.wanqingzhang01.workers.dev";
 
+  // fetch() has no built-in timeout — a stalled connection or a response
+  // that never finishes streaming (either leg: browser<->Worker or
+  // Worker<->Gemini) hangs forever with nothing to catch, leaving the
+  // learner stuck on "Thinking..." with no way to recover. Abort and
+  // fail into the normal error-bubble path instead.
+  var REQUEST_TIMEOUT_MS = 18000;
+
   // ---------- State ----------
   var state = {
     submissionCount: 0,
@@ -212,6 +219,9 @@
   }
 
   function friendlyErrorMessage(status, body) {
+    if (status === "timeout") {
+      return "The AI coach is taking too long to respond. Please try submitting again.";
+    }
     if (status === 429) {
       return body && body.error
         ? body.error
@@ -260,22 +270,32 @@
       learnerReasoning: reasoning,
     };
 
+    var controller = new AbortController();
+    var timedOut = false;
+    var timeoutId = setTimeout(function () {
+      timedOut = true;
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+
     var res, data;
     try {
       res = await fetch(WORKER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       data = await res.json().catch(function () {
         return null;
       });
     } catch (err) {
-      // Network failure, CORS block, DNS, etc. — transient; don't cost
-      // the learner an attempt or lock them out.
-      setBubble(aiBubble, friendlyErrorMessage(null, null), "ai error");
+      // Network failure, CORS block, DNS, timeout (AbortError), etc. —
+      // transient; don't cost the learner an attempt or lock them out.
+      setBubble(aiBubble, friendlyErrorMessage(timedOut ? "timeout" : null, null), "ai error");
       recoverControlsAfterFailure();
       return;
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (!res.ok) {
