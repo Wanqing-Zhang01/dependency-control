@@ -187,11 +187,28 @@
     submitBtn.disabled = disabled;
   }
 
+  function retryButtonLabel() {
+    return state.submissionCount === 0 ? "Submit for evaluation" : "Try Again";
+  }
+
   // Puts the controls back the way they were before this (failed) attempt,
   // so a transient error never costs the learner a try or locks them out.
+  // Reasoning is deliberately left as-is here — a network/upstream error
+  // isn't a comment on what they typed, so there's no reason to make them
+  // retype it.
   function recoverControlsAfterFailure() {
     setControlsDisabled(false);
-    submitBtn.textContent = state.submissionCount === 0 ? "Submit for evaluation" : "Try Again";
+    submitBtn.textContent = retryButtonLabel();
+  }
+
+  // Re-enables controls for another attempt after a decline or a genuine
+  // miss under the cap, clearing the reasoning textarea back to its
+  // placeholder so the learner starts their next attempt fresh.
+  function resetControlsForAnotherAttempt() {
+    setControlsDisabled(false);
+    reasoningInput.value = "";
+    reasoningInput.placeholder = "Type your revised reasoning here...";
+    submitBtn.textContent = retryButtonLabel();
   }
 
   function friendlyErrorMessage(status, body) {
@@ -216,14 +233,14 @@
     }
 
     // Determine the outcome for whatever configuration is active right
-    // now, then render the chart directly against it — this is the only
-    // place judgment colors get applied. This is purely our own math and
-    // does not depend on the AI call below, so it happens immediately.
+    // now. This is purely our own math and doesn't depend on the AI call
+    // below — but applying it to the chart (judgment colors) waits until
+    // the response comes back and confirms this was a genuine evaluation,
+    // not a decline: a declined submission wasn't actually evaluated, so
+    // the dots must stay in their pre-submission pending look.
     var schedule = currentSchedule();
     var success = schedule.launchDay <= DEADLINE_DAY;
     var missBy = success ? 0 : schedule.launchDay - DEADLINE_DAY;
-
-    renderChart(true, success);
 
     addBubble(reasoning, "user");
     var aiBubble = addBubble("Thinking...", "ai thinking");
@@ -272,23 +289,23 @@
 
     // A decline (the Worker's Step 1: the reasoning wasn't a genuine
     // attempt) is not a real evaluation — the learner hasn't actually
-    // attempted the task yet. Treat it exactly like the error-handling
-    // paths above: don't touch the attempt counter, don't lock the
-    // session, just let them try again.
+    // attempted the task yet. No judgment colors, no attempt consumed,
+    // no session lock; just clear the textarea and let them try again.
     if (data && data.declined) {
-      recoverControlsAfterFailure();
+      resetControlsForAnotherAttempt();
       return;
     }
+
+    // A genuine evaluation happened — now it's safe to apply judgment
+    // colors to the chart.
+    renderChart(true, success);
 
     state.submissionCount += 1;
 
     if (success || state.submissionCount >= MAX_SUBMISSIONS) {
       endSession();
     } else {
-      reasoningInput.value = "";
-      reasoningInput.placeholder = "Type your revised reasoning here...";
-      submitBtn.textContent = "Try Again";
-      setControlsDisabled(false);
+      resetControlsForAnotherAttempt();
     }
   }
 
