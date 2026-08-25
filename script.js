@@ -223,9 +223,11 @@
       return "The AI coach is taking too long to respond. Please try submitting again.";
     }
     if (status === 429) {
-      return body && body.error
-        ? body.error
-        : "You've hit the limit for AI feedback requests right now. Please wait a bit and try again.";
+      // Deliberately not surfacing the Worker's raw message here (it
+      // includes the exact reset countdown, e.g. "...try again in 42
+      // seconds") — this just needs to read as rate-limiting, distinct
+      // from a stalled/timed-out request, not report the countdown.
+      return "This demo has hit its hourly usage limit — please try again later.";
     }
     if (body && body.error) {
       return "The AI coach ran into a problem: " + body.error + " Please try submitting again.";
