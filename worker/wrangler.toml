@@ -1,0 +1,20 @@
+name = "dependency-control-coach"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Non-secret configuration. Override without redeploying code by running:
+#   wrangler deploy --var GEMINI_MODEL:<model-id>
+# or editing the value below and redeploying.
+[vars]
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+# Comma-separated list of origins allowed to call this Worker.
+# "*" allows any origin — fine for local/portfolio testing, tighten before
+# sharing the frontend's real deployed URL.
+ALLOWED_ORIGIN = "*"
+
+# Created via `wrangler kv namespace create RATE_LIMIT_KV` — see worker/README.md.
+# Fill in the id (and preview_id, for `wrangler dev`) after creating it.
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_KV_PREVIEW_NAMESPACE_ID"

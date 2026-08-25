@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gantt Dependency Coach</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="scenario">
+      <h1>Scenario</h1>
+      <p>
+        The campaign has three phases: Design, Legal review, and Launch. The ad slot for
+        Launch is locked on Day 8 and can't move. Review how the three phases are currently
+        scheduled, and adjust anything that doesn't reflect how they should actually depend
+        on each other.
+      </p>
+    </header>
+
+    <div class="main">
+      <section class="panel gantt-panel">
+        <h2>Gantt Chart</h2>
+
+        <div class="chart-grid" id="chartGrid">
+          <!-- axis row -->
+          <div class="row-label axis-spacer"></div>
+          <div class="axis-cells" id="axisCells"></div>
+
+          <!-- Design row -->
+          <div class="row-label" id="designLabel">Design</div>
+          <div class="track-cell" id="designTrackCell">
+            <div class="track"></div>
+            <div class="dots" id="designDots"></div>
+          </div>
+
+          <!-- Legal row -->
+          <div class="row-label" id="legalLabel">Legal</div>
+          <div class="track-cell" id="legalTrackCell">
+            <div class="track"></div>
+            <div class="dots" id="legalDots"></div>
+          </div>
+
+          <!-- Launch row -->
+          <div class="row-label" id="launchLabel">Launch</div>
+          <div class="track-cell" id="launchTrackCell">
+            <div class="track"></div>
+            <div class="dots" id="launchDots"></div>
+          </div>
+        </div>
+
+        <hr class="divider-rule" />
+
+        <div class="controls">
+          <h3>Dependency Controls</h3>
+          <div class="controls-row">
+            <select id="depType" aria-label="Legal dependency type">
+              <option value="ss">Legal: start to start</option>
+              <option value="fs">Legal: finish to start</option>
+            </select>
+
+            <div class="lag-box">
+              <label for="lagInput">Lag</label>
+              <span class="lag-value">(</span>
+              <input type="number" id="lagInput" value="0" step="1" min="-8" max="8" />
+              <span class="lag-value">)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="divider"></div>
+
+      <section class="panel chat-panel">
+        <h2>AI coach chat</h2>
+
+        <div class="chat-history" id="chatHistory"></div>
+
+        <textarea
+          id="reasoning"
+          placeholder="Explain your reasoning..."
+          rows="4"
+        ></textarea>
+
+        <button id="submitBtn">Submit for evaluation</button>
+      </section>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
